@@ -17,7 +17,9 @@ musicbrainzngs.set_useragent("new-albums", "0.0.1", "https://github.com/nikitalp
 discogs = discogs_client.Client('new-albums/0.0.1', user_token='tnKwPJHZUkDdOTwQWdLRZEYWziNRQhBoKnLjDumm')
 
 # run script
-api = pylast.LastFMNetwork(api_key=api_key, api_secret=api_secret, username=username)
+api = pylast.LastFMNetwork(api_key=api_key,
+                           api_secret=api_secret,
+                           username=username)
 artists = pylast.User(username, api).get_library().get_artists(limit=None)
 
 discogs_id = []
@@ -26,20 +28,29 @@ for artist in artists:
     if artist.playcount >= 20:
         musicbrainz_search = musicbrainzngs.search_artists(artist=artist.item.name)['artist-list']
         discogs_search = discogs.search(artist.item.name, type='artist')
+
         if musicbrainz_search:
             musicbrainz_id.append(musicbrainz_search[0]['id'])
+            # pprint(musicbrainzngs.get_artist_by_id(musicbrainz_search[0]['id'],
+            #                                        includes=["release-groups"],
+            #                                        release_type=["album", "ep"])['artist']['release-group-list'])
         else:
             musicbrainz_id.append(None)
+
         if discogs_search:
-            discogs_id.append(discogs_search[0].id)
+            discogs_id.append(str(discogs_search[0].id))
+            # for release in discogs_search[0].releases:
+            #     pprint(release)
         else:
             discogs_id.append(None)
     else:
         musicbrainz_id.append(None)
         discogs_id.append(None)
 
-data = {'artist': [artist.item.name for artist in artists], 'musicbrainz_id': musicbrainz_id, 'discogs_id': discogs_id}
+data = {'artist': [artist.item.name for artist in artists],
+        'musicbrainz_id': musicbrainz_id,
+        'discogs_id': discogs_id}
 dataframe = pandas.DataFrame.from_dict(data).dropna(how='any')
 dataframe.to_csv('library.csv', sep=',', encoding='utf-8')
-# pprint(dataframe)
+
 # musicbrainzngs.get_artist_by_id(artist_id, includes=["release-groups"], release_type=["album", "ep"])
