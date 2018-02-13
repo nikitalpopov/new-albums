@@ -12,3 +12,9 @@ pandas == 0.22.0
 
 # main.py: 4
 pylast == 2.1.0
+
+# main.py: 5
+requests == 2.18.4
+
+# main.py: 6
+spotipy == 2.4.4
