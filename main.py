@@ -1,6 +1,8 @@
 import discogs_client
+import json
 import musicbrainzngs
 import pandas
+import pygn
 import pylast
 import requests
 import spotipy
@@ -23,6 +25,10 @@ discogs = discogs_client.Client('new-albums/0.0.1', user_token=user_token)
 # spotify
 spotify = spotipy.Spotify()
 
+# gracenote
+gracenote_client = ''
+gracenote_id = ''
+
 # run script
 api = pylast.LastFMNetwork(api_key=api_key,
                            api_secret=api_secret,
@@ -33,6 +39,7 @@ artists = [artist.item.name for artist in artists if artist.playcount >= 20]
 discogs_id = []
 musicbrainz_id = []
 spotify_id = []
+discography = []
 for artist in artists:
     print(artist)
     try:
@@ -101,10 +108,20 @@ for artist in artists:
     except:
         spotify_id.append(None)
 
+    try:
+        # gracenote = pygn.get_discography(clientID=gracenote_client, userID=gracenote_id, artist=artist)
+        # discography.append(json.dumps(discography, sort_keys=True, indent=4))
+        # for release in discography[-1]:
+        #     print(release['album_year'] + ' ' + release['album_title'])
+        discography.append(None)
+    except:
+        discography.append(None)
+
 data = {'artist': artists,
         'musicbrainz_id': musicbrainz_id,
         'discogs_id': discogs_id,
-        'spotify_id': spotify_id}
+        'spotify_id': spotify_id,
+        'discography': discography}
 dataframe = pandas.DataFrame.from_dict(data)
 dataframe.to_csv('library.csv', sep=',', encoding='utf-8')
 
