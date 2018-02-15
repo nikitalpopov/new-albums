@@ -4,17 +4,20 @@
 # main.py: 1
 discogs_client == 2.2.1
 
-# main.py: 2
-musicbrainzngs == 0.6
-
 # main.py: 3
-pandas == 0.22.0
+lxml == 4.1.1
 
 # main.py: 4
-pylast == 2.1.0
+musicbrainzngs == 0.6
 
 # main.py: 5
+pandas == 0.22.0
+
+# main.py: 7
+pylast == 2.1.0
+
+# main.py: 8
 requests == 2.18.4
 
-# main.py: 6
+# main.py: 9
 spotipy == 2.4.4
