@@ -13,11 +13,8 @@ musicbrainzngs == 0.6
 # main.py: 5
 pandas == 0.22.0
 
-# main.py: 7
+# main.py: 6
 pylast == 2.1.0
 
-# main.py: 8
+# main.py: 7
 requests == 2.18.4
-
-# main.py: 9
-spotipy == 2.4.4
