@@ -45,7 +45,6 @@ def get_albums(artist_id):
         type = row.get("data-object-type")
         title = extract(row, ".title a")
         formats = extract(row, ".title .format")
-        # todo full release date
         year = extract(row, "td[data-header=\"Year: \"]")
         if formats is not None:
             if 'album' in formats.lower():
@@ -61,24 +60,25 @@ api = pylast.LastFMNetwork(api_key=api_key,
 artists = pylast.User(username, api).get_library().get_artists(limit=None)
 
 artists = [artist.item.name for artist in artists if artist.playcount >= 20]
-discogs_id = []
 musicbrainz_id = []
+discogs_id = []
 discography = []
 for artist in artists:
     # print(artist)
+    releases = {'musicbrainz': None, 'discogs': None}
     try:
         musicbrainz_search = musicbrainzngs.search_artists(artist=artist)['artist-list']
     except:
+        # print('some error with musicbrainz')
         musicbrainz_id.append(None)
     else:
         if musicbrainz_search:
             musicbrainz_id.append(musicbrainz_search[0]['id'])
 
-            releases = musicbrainzngs.get_artist_by_id(musicbrainz_id[-1],
-                                                       includes=["release-groups"],
-                                                       release_type=["album", "ep"])['artist']['release-group-list']
             albums = []
-            for release in releases:
+            for release in musicbrainzngs.get_artist_by_id(musicbrainz_id[-1],
+                                                           includes=["release-groups"],
+                                                           release_type=["album", "ep"])['artist']['release-group-list']:
                 try:
                     release['type']
                 except KeyError:
@@ -86,25 +86,20 @@ for artist in artists:
                 else:
                     if release['type'] == 'Album':
                         albums.append((release['id'], release['title'], release['first-release-date']))
-            discography.append(albums)
+            releases['musicbrainz'] = albums
         else:
-            discography.append(None)
             musicbrainz_id.append(None)
 
     try:
         discogs_search = discogs.search(artist, type='artist')
     except:
-        print('some error with discogs')
+        # print('some error with discogs')
         discogs_id.append(None)
     else:
         if discogs_search:
             discogs_id.append(str(discogs_search[0].id))
 
-            albums = get_albums(discogs_id[-1])
-            if discography[-1]:
-                continue
-            else:
-                discography[-1] = albums
+            releases['discogs'] = get_albums(discogs_id[-1])
             # releases = requests.get('https://api.discogs.com/artists/' + discogs_id[-1] + '/releases'
             #                         + '?sort=year'
             #                         + '&sort_order=desc')
@@ -122,6 +117,9 @@ for artist in artists:
         else:
             discogs_id.append(None)
 
+    discography.append(releases)
+
+# pprint(discography)
 data = {'artist': artists,
         'musicbrainz_id': musicbrainz_id,
         'discogs_id': discogs_id,
