@@ -10,8 +10,11 @@ import pylast
 import requests
 from colored import fg, attr
 from datetime import datetime
+from multiprocessing import cpu_count
+from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
 from pprint import pprint
+from tqdm import tqdm
 
 
 def notify(artist, album, sound='Glass'):
@@ -21,34 +24,27 @@ def notify(artist, album, sound='Glass'):
         :param sound:
     """
     print()
-    print(fg(8) + "new album {} by {}".format(album, artist) + attr(0))
-    print()
+    print(fg(8) + "{} by {}".format(album, artist) + attr(0))
 
     # macOS notification
-    if platform.system() == 'Darwin':
-        os.system("""osascript -e 'display notification "new album {} by {}" with title "new albums" sound name "{}"'""".
-                  format(album, artist, sound))
-        os.system("""ntfy -b telegram send 'new album {} by {}'""".format(album, artist))
+    # if platform.system() == 'Darwin':
+    #     os.system("""
+    #     osascript -e 'display notification "new album {} by {}" with title "new albums" sound name "{}"'
+    #     """.format(album, artist, sound))
+    os.system("""ntfy -b telegram send '{} by {}'""".format(album, artist))
 
 
 # last.fm
-api_key = '0d2c6862c7279e31682eace2808e3911'
-api_secret = 'f2dd5b521da5f6dbf4ae1835dc96193e'
-username = 'tapochek97'
-password_hash = pylast.md5('')  # @todo fill password
+api_key = 'your api key'
+api_secret = 'your api secret'
+username = 'your last.fm username'
+password_hash = pylast.md5('')
 
 
 def get_artists(plays=20):
-    api = pylast.LastFMNetwork(api_key=api_key,
-                               api_secret=api_secret,
-                               username=username)
-
+    api = pylast.LastFMNetwork(api_key=api_key, api_secret=api_secret, username=username)
     artists = [artist.item.name for artist in pylast.User(username, api).get_library().get_artists(limit=None)
                if artist.playcount >= plays]
-    # with open('artists.txt', 'w') as file:
-    #     for artist in artists:
-    #         file.write("%s\n" % artist)
-    #     file.close()
 
     return artists
 
@@ -77,13 +73,11 @@ def get_albums_from_musicbrainz(musicbrainz):
                                        + [1] * (3 - len(album['date'].split('-')))])
         except:
             album['date'] = datetime(1000, 1, 1)
-        # print(album['title'] + ': ', album['date'])
-        # album['date'] = datetime.strptime(album['date'], '%Y-%m-%d')
     return sorted(albums, key=itemgetter('date'), reverse=True)
 
 
 # discogs
-user_token = 'tnKwPJHZUkDdOTwQWdLRZEYWziNRQhBoKnLjDumm'
+user_token = 'your discogs user token'
 discogs_cli = discogs_client.Client('new-albums/0.0.1', user_token=user_token)
 
 
@@ -123,48 +117,9 @@ def get_albums_from_discogs(artist_id):
     return albums
 
 
-def get_new_releases(dataframe):
-    musicbrainz_latest = dataframe[['artist', 'latest_update', 'musicbrainz_discography', 'musicbrainz_id']]
-    discogs_latest = dataframe[['artist', 'latest_update', 'discogs_discography', 'discogs_id']]
-    musicbrainz_latest['musicbrainz_discography'] = musicbrainz_latest['musicbrainz_discography']\
-        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
-    discogs_latest['discogs_discography'] = discogs_latest['discogs_discography']\
-        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
-    musicbrainz_latest = \
-        musicbrainz_latest.replace(to_replace='None', value=numpy.nan).dropna()
-    discogs_latest = discogs_latest.replace(to_replace='None', value=numpy.nan).dropna()
-
-    writer = pandas.ExcelWriter("new_albums.xlsx")
-    musicbrainz_latest.to_excel(writer, 'musicbrainz')
-    discogs_latest.to_excel(writer, 'discogs')
-
-    musicbrainz_latest = [(row['artist'],
-                           row['musicbrainz_discography']['title'],
-                           row['musicbrainz_discography']['date']) for _, row in musicbrainz_latest.iterrows()]
-    discogs_latest = [(row['artist'],
-                       row['discogs_discography']['title'],
-                       row['discogs_discography']['date']) for _, row in discogs_latest.iterrows()]
-
-    # todo compare musicbrainz and discogs results and choose final list
-
-    return musicbrainz_latest
-
-
-# run script
-artists = get_artists()
-
-# get only new artists
-# library_dump = pandas.read_csv('artists.csv', sep=',')
-# artists = library_dump[~library_dump['artist'].isin(artists)].copy()
-# artists = artists['artist'].tolist()
-
-musicbrainz_id = []
-discogs_id = []
-musicbrainz_discography = []
-discogs_discography = []
-latest_update = []
-for artist in artists:
-    print(fg(2) + artist + attr(0))
+def get_data(artist):
+    # print(fg(2) + artist + attr(0))
+    tqdm.write(fg(2) + artist + attr(0))
     musicbrainz = None
     discogs = None
     musicbrainz_releases = None
@@ -173,7 +128,8 @@ for artist in artists:
         musicbrainz_search = [artist for artist in musicbrainzngs.search_artists(artist=artist)['artist-list']
                               if artist['ext:score'] == '100']
     except:
-        print(fg(2) + 'some error with musicbrainz' + attr(0))
+        # print(fg(2) + 'some error with musicbrainz' + attr(0))
+        tqdm.write(fg(2) + 'some error with musicbrainz' + attr(0))
     else:
         artist_id = None
         if len(musicbrainz_search) > 1:
@@ -192,7 +148,8 @@ for artist in artists:
     try:
         discogs_search = discogs_cli.search(artist, type='artist')
     except:
-        print(fg(2) + 'some error with discogs' + attr(0))
+        # print(fg(2) + 'some error with discogs' + attr(0))
+        tqdm.write(fg(2) + 'some error with discogs' + attr(0))
     else:
         # todo redo
         artist_id = None
@@ -221,22 +178,69 @@ for artist in artists:
             # print()
             # for release in discogs_search[0].releases:
             #     pprint(release)
-    musicbrainz_id.append(musicbrainz)
-    discogs_id.append(discogs)
-    musicbrainz_discography.append(musicbrainz_releases)
-    discogs_discography.append(discogs_releases)
-    latest_update.append(datetime.today().date())
 
-data = {'artist': artists,
-        'musicbrainz_id': musicbrainz_id,
-        'discogs_id': discogs_id,
-        'musicbrainz_discography': musicbrainz_discography,
-        'discogs_discography': discogs_discography,
-        'latest_update': latest_update}
-dataframe = pandas.DataFrame.from_dict(data)
+    result = pandas.DataFrame(columns=['latest_update', 'musicbrainz_id', 'discogs_id', 'musicbrainz_discography',
+                                       'discogs_discography', 'artist'])
+
+    return result.append({'latest_update': datetime.today().date(), 'musicbrainz_id': musicbrainz,
+                          'discogs_id': discogs, 'musicbrainz_discography': musicbrainz_releases,
+                          'discogs_discography': discogs_releases, 'artist': artist}, ignore_index=True)
+
+
+def get_new_releases(dataframe):
+    musicbrainz_latest = dataframe[['artist', 'latest_update', 'musicbrainz_discography', 'musicbrainz_id']]
+    discogs_latest = dataframe[['artist', 'latest_update', 'discogs_discography', 'discogs_id']]
+    musicbrainz_latest['musicbrainz_discography'] = musicbrainz_latest['musicbrainz_discography']\
+        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
+    discogs_latest['discogs_discography'] = discogs_latest['discogs_discography']\
+        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
+    musicbrainz_latest = \
+        musicbrainz_latest.replace(to_replace='None', value=numpy.nan).dropna()
+    discogs_latest = discogs_latest.replace(to_replace='None', value=numpy.nan).dropna()
+
+    writer = pandas.ExcelWriter("new_albums.xlsx")
+    musicbrainz_latest.to_excel(writer, 'musicbrainz')
+    discogs_latest.to_excel(writer, 'discogs')
+
+    musicbrainz_latest = [(row['artist'],
+                           row['musicbrainz_discography']['title'],
+                           row['musicbrainz_discography']['date']) for _, row in musicbrainz_latest.iterrows()]
+    discogs_latest = [(row['artist'],
+                       row['discogs_discography']['title'],
+                       row['discogs_discography']['date']) for _, row in discogs_latest.iterrows()]
+
+    # todo compare musicbrainz and discogs results and choose final list
+
+    return musicbrainz_latest
+
+
+# run script
+artists = get_artists(50)
+
+# get only new artists
+# library_dump = pandas.read_csv('artists.csv', sep=',')
+# artists = library_dump[~library_dump['artist'].isin(artists)].copy()
+# artists = artists['artist'].tolist()
+
+dataframe = pandas.DataFrame(columns=['artist', 'latest_update', 'musicbrainz_discography', 'musicbrainz_id',
+                                      'discogs_discography', 'discogs_id'])
+
+# with ThreadPool(cpu_count() - 1) as pool:
+#     with tqdm(total=len(artists)) as pbar:
+#         for i, _ in tqdm(enumerate(pool.starmap(get_data,
+#                                             zip(range(0, len(artists)),
+#                                                 [artists for _ in range(0, len(artists))],
+#                                                 [dataframe for _ in range(0, len(artists))])))):
+#             pbar.update()
+#     # data = pool.map(get_data, tqdm(artists))
+# pool.close()
+# pool.join()
+
+for artist in tqdm(artists):
+    data = get_data(artist)
+    dataframe = dataframe.append(data, ignore_index=True)
 dataframe.to_csv('library.csv', sep=',', encoding='utf-8')
 dataframe[['artist', 'musicbrainz_id', 'discogs_id', 'latest_update']].to_csv('artists.csv', sep=',', encoding='utf-8')
 
 new_releases = get_new_releases(dataframe)
-# pprint(new_releases)
-[[notify(artist, album) for artist, album, _ in release] for release in new_releases]
+[notify(artist, album) for (artist, album, _) in new_releases]
