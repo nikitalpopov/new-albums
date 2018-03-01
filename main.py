@@ -1,5 +1,6 @@
 import discogs_client
 import json
+import errno
 import lxml.html
 import musicbrainzngs
 import numpy
@@ -8,8 +9,10 @@ import pandas
 import platform
 import pylast
 import requests
+import urllib.request
 from colored import fg, attr
 from datetime import datetime
+from fabulous import utils, image
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from operator import itemgetter
@@ -17,7 +20,7 @@ from pprint import pprint
 from tqdm import tqdm
 
 
-def notify(artist, album, sound='Glass'):
+def notify(artist, album, album_art, sound='Glass'):
     """Send os notification
         :param artist:
         :param album:
@@ -32,6 +35,8 @@ def notify(artist, album, sound='Glass'):
     #     osascript -e 'display notification "new album {} by {}" with title "new albums" sound name "{}"'
     #     """.format(album, artist, sound))
     os.system("""ntfy -b telegram send '{} by {}'""".format(album, artist))
+    if album_art:
+        os.system("""ntfy -b telegram send '{}'""".format(album_art))
 
 
 # last.fm
@@ -55,6 +60,7 @@ musicbrainzngs.set_useragent("new-albums", "0.0.1", "https://github.com/nikitalp
 
 def get_albums_from_musicbrainz(musicbrainz):
     albums = []
+    # todo try to change release-group to official release
     for release in \
             musicbrainzngs.get_artist_by_id(musicbrainz, includes=["release-groups"],
                                             release_type=["album", "ep"])['artist']['release-group-list']:
@@ -77,7 +83,7 @@ def get_albums_from_musicbrainz(musicbrainz):
 
 
 # discogs
-user_token = 'your discogs user token'
+user_token = 'tnKwPJHZUkDdOTwQWdLRZEYWziNRQhBoKnLjDumm'
 discogs_cli = discogs_client.Client('new-albums/0.0.1', user_token=user_token)
 
 
@@ -191,9 +197,9 @@ def get_new_releases(dataframe):
     musicbrainz_latest = dataframe[['artist', 'latest_update', 'musicbrainz_discography', 'musicbrainz_id']]
     discogs_latest = dataframe[['artist', 'latest_update', 'discogs_discography', 'discogs_id']]
     musicbrainz_latest['musicbrainz_discography'] = musicbrainz_latest['musicbrainz_discography']\
-        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
+        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] == datetime.today() else None)
     discogs_latest['discogs_discography'] = discogs_latest['discogs_discography']\
-        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] >= datetime.today() else None)
+        .apply(lambda x: x[0] if x and len(x) > 0 and x[0]['date'] == datetime.today() else None)
     musicbrainz_latest = \
         musicbrainz_latest.replace(to_replace='None', value=numpy.nan).dropna()
     discogs_latest = discogs_latest.replace(to_replace='None', value=numpy.nan).dropna()
@@ -203,6 +209,7 @@ def get_new_releases(dataframe):
     discogs_latest.to_excel(writer, 'discogs')
 
     musicbrainz_latest = [(row['artist'],
+                           row['musicbrainz_discography']['id'],
                            row['musicbrainz_discography']['title'],
                            row['musicbrainz_discography']['date']) for _, row in musicbrainz_latest.iterrows()]
     discogs_latest = [(row['artist'],
@@ -243,4 +250,22 @@ dataframe.to_csv('library.csv', sep=',', encoding='utf-8')
 dataframe[['artist', 'musicbrainz_id', 'discogs_id', 'latest_update']].to_csv('artists.csv', sep=',', encoding='utf-8')
 
 new_releases = get_new_releases(dataframe)
-[notify(artist, album) for (artist, album, _) in new_releases]
+try:
+    os.makedirs('./covers')
+except OSError as e:
+    if e.errno != errno.EEXIST:
+        raise
+for (artist, album_id, album, date) in new_releases:
+    try:
+        urllib.request.urlretrieve('http://coverartarchive.org/release-group/' + album_id + '/front.jpg', './covers/' + album_id + '.jpg')
+    except:
+        album_art = None
+    else:
+        album_art = 'http://coverartarchive.org/release-group/' + album_id + '/front.jpg'
+
+    notify(artist, album, album_art)
+
+    if album_art:
+        print(image.Image('./covers/' + album_id + '.jpg'))
+    print(fg('yellow') + 'https://musicbrainz.org/release-group/' + album_id + '/' + attr(0))
+    print(fg('yellow'), date.date(), attr(0))
